@@ -1,0 +1,63 @@
+# ========================
+# Python & Virtual Env
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment variables and virtual environments
+.env
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ========================
+# IDE & OS Files
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ========================
+# Deep Learning & YOLO Specifics
+# ========================
+*.pt
+*.pth
+*.onnx
+*.weights
+
+runs/
+scripts/runs/
+wandb/
+
+*.png
+
+# ========================
+# Project Datasets
+# ========================
+
+/datasets/*
+!/datasets/**/*.yaml
