@@ -25,7 +25,7 @@ IMAGE_EXTENSIONS = ("*.jpg", "*.jpeg", "*.png", "*.bmp")
 
 def collect_images(image_dir: Path) -> list[Path]:
     """Collect all supported image files from the source image directory."""
-    images = []
+    images: list[Path] = []
     for pattern in IMAGE_EXTENSIONS:
         images.extend(image_dir.glob(pattern))
     return sorted(images)
@@ -140,7 +140,8 @@ def convert_dataset() -> None:
     """Convert crack_segmentation into a YOLO detection dataset."""
     if not IMAGE_DIR.exists() or not MASK_DIR.exists():
         raise FileNotFoundError(
-            f"Expected source dataset under {SOURCE_DIR}, but images/ or masks/ is missing."
+            f"Expected source dataset under {SOURCE_DIR},"
+            "but images/ or masks/ is missing."
         )
 
     pairs, missing_masks = find_valid_pairs(IMAGE_DIR, MASK_DIR)
@@ -151,7 +152,7 @@ def convert_dataset() -> None:
     write_data_yaml(OUTPUT_DIR)
 
     split_pairs_map = split_pairs(pairs)
-    summary = Counter()
+    summary: Counter[str] = Counter()
 
     print(f"Source dataset: {SOURCE_DIR}")
     print(f"Output dataset: {OUTPUT_DIR}")

@@ -1,65 +1,102 @@
-from ultralytics import YOLO
 import time
+from pathlib import Path
+
 import torch
+from ultralytics.models.yolo import YOLO
 
-# ----- YOLOv8 -----
-# MODEL_NAME = 'yolov8n-seg.pt'
-MODEL_NAME = 'yolov8s-seg.pt'
-# MODEL_NAME = 'yolov8m-seg.pt'
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DATA_YAML = REPO_ROOT / "datasets" / "crack_yolo" / "data.yaml"
+PROJECT_DIR = REPO_ROOT / "runs" / "yolo_detect"
 
-# ----- YOLO11 -----
-# MODEL_NAME = 'yolo11n-seg.pt'
-# MODEL_NAME = 'yolo11s-seg.pt'
-# MODEL_NAME = 'yolo11m-seg.pt'
+# Choose a lightweight detection model first because the current project goal is
+# robust real-time crack detection, not segmentation quality.
+MODEL_NAME = "yolo11n.pt"
 
-# =====================================================================
-# Hyperparameters
-# =====================================================================
-DATA_YAML = '../datasets/YOLO_MASS_CRACK/mass_crack.yaml'
+# Training settings.
 EPOCHS = 100
-IMG_SIZE = 640
+IMG_SIZE = 960
 BATCH_SIZE = 8
-PROJECT_DIR = '../runs/Model_Comparison'
+PATIENCE = 20
+WORKERS = 4
+DEVICE = "0" if torch.cuda.is_available() else "cpu"
+RUN_NAME = f"{MODEL_NAME.split('.')[0]}_crack_detect"
 
-def run_single_experiment():
-    run_name = f"exp_{MODEL_NAME.split('.')[0]}_mass_crack"
 
-    print("\n" + "="*60)
-    print(f"Current Model: {MODEL_NAME}")
-    print(f"Saving at directory: {PROJECT_DIR}/{run_name}")
-    print("="*60)
+def validate_paths() -> None:
+    """Fail early if the converted detection dataset is missing."""
+    if not DATA_YAML.exists():
+        raise FileNotFoundError(
+            f"Dataset config not found: {DATA_YAML}\n"
+            "Run src/mass_production_converter.py first, or update the dataset path."
+        )
+
+
+def print_run_config() -> None:
+    """Print the training configuration for the current run."""
+    print("\n" + "=" * 72)
+    print(f"Model:      {MODEL_NAME}")
+    print(f"Dataset:    {DATA_YAML}")
+    print(f"Project:    {PROJECT_DIR}")
+    print(f"Run name:   {RUN_NAME}")
+    print(f"Epochs:     {EPOCHS}")
+    print(f"Image size: {IMG_SIZE}")
+    print(f"Batch size: {BATCH_SIZE}")
+    print(f"Device:     {DEVICE}")
+    print("=" * 72)
+
+
+def train() -> None:
+    """Train a YOLO detection model on the converted crack dataset."""
+    validate_paths()
+    print_run_config()
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    try:
-        model = YOLO(MODEL_NAME)
+    model = YOLO(MODEL_NAME)
 
-        start_time = time.time()
-        results = model.train(
-            data=DATA_YAML,
-            epochs=EPOCHS,
-            imgsz=IMG_SIZE,
-            batch=BATCH_SIZE,
-            project=PROJECT_DIR,
-            name=run_name,
-            workers=4,
-            patience=20,
-            close_mosaic=10,
-            overlap_mask=True,
-            device='0'
-        )
-        train_time = (time.time() - start_time) / 60
+    start_time = time.time()
+    results = model.train(
+        data=str(DATA_YAML),
+        epochs=EPOCHS,
+        imgsz=IMG_SIZE,
+        batch=BATCH_SIZE,
+        project=str(PROJECT_DIR),
+        name=RUN_NAME,
+        device=DEVICE,
+        workers=WORKERS,
+        patience=PATIENCE,
+        pretrained=True,
+        close_mosaic=10,
+        cache=False,
+        degrees=0.0,
+        translate=0.05,
+        scale=0.20,
+        shear=0.0,
+        perspective=0.0,
+        flipud=0.0,
+        fliplr=0.5,
+        hsv_h=0.015,
+        hsv_s=0.50,
+        hsv_v=0.30,
+        mosaic=0.5,
+        mixup=0.0,
+        copy_paste=0.0,
+        erasing=0.0,
+    )
+    train_time_minutes = (time.time() - start_time) / 60
 
-        print("\n" + "="*60)
-        print(f"Training completed: {MODEL_NAME}")
-        print(f"Training time: {train_time:.2f} minutes")
-        print(f"Mask mAP@0.5:      {results.seg.map50:.4f}")
-        print(f"Mask mAP@0.5-0.95: {results.seg.map:.4f}")
-        print("="*60)
+    metrics = results.box
 
-    except Exception as e:
-        print(f"Error during training: {e}")
+    print("\n" + "=" * 72)
+    print("Training completed.")
+    print(f"Training time (minutes): {train_time_minutes:.2f}")
+    print(f"Box mAP@0.5:            {metrics.map50:.4f}")
+    print(f"Box mAP@0.5:0.95:       {metrics.map:.4f}")
+    print(f"Precision:              {metrics.mp:.4f}")
+    print(f"Recall:                 {metrics.mr:.4f}")
+    print("=" * 72)
+
 
 if __name__ == "__main__":
-    run_single_experiment()
+    train()
