@@ -206,5 +206,7 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-
+# Datasets and model checkpoints
 datasets
+runs
+*.pt

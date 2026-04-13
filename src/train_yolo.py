@@ -2,15 +2,18 @@ import time
 from pathlib import Path
 
 import torch
+from ultralytics import settings
 from ultralytics.models.yolo import YOLO
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_YAML = REPO_ROOT / "datasets" / "crack_yolo" / "data.yaml"
 PROJECT_DIR = REPO_ROOT / "runs" / "yolo_detect"
+MODELS_DIR = REPO_ROOT / "models"
 
 # Choose a lightweight detection model first because the current project goal is
 # robust real-time crack detection, not segmentation quality.
 MODEL_NAME = "yolo11n.pt"
+MODEL_PATH = MODELS_DIR / MODEL_NAME
 
 # Training settings.
 EPOCHS = 100
@@ -19,7 +22,20 @@ BATCH_SIZE = 8
 PATIENCE = 20
 WORKERS = 4
 DEVICE = "0" if torch.cuda.is_available() else "cpu"
-RUN_NAME = f"{MODEL_NAME.split('.')[0]}_crack_detect"
+RUN_NAME = f"{MODEL_PATH.stem}_crack_detect"
+
+
+def configure_ultralytics_dirs() -> None:
+    """Store pretrained weights and run outputs under project directories."""
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    PROJECT_DIR.mkdir(parents=True, exist_ok=True)
+    settings.update(
+        {
+            "weights_dir": str(MODELS_DIR),
+            "runs_dir": str(REPO_ROOT / "runs"),
+            "datasets_dir": str(REPO_ROOT / "datasets"),
+        }
+    )
 
 
 def validate_paths() -> None:
@@ -34,7 +50,7 @@ def validate_paths() -> None:
 def print_run_config() -> None:
     """Print the training configuration for the current run."""
     print("\n" + "=" * 72)
-    print(f"Model:      {MODEL_NAME}")
+    print(f"Model:      {MODEL_PATH}")
     print(f"Dataset:    {DATA_YAML}")
     print(f"Project:    {PROJECT_DIR}")
     print(f"Run name:   {RUN_NAME}")
@@ -47,13 +63,14 @@ def print_run_config() -> None:
 
 def train() -> None:
     """Train a YOLO detection model on the converted crack dataset."""
+    configure_ultralytics_dirs()
     validate_paths()
     print_run_config()
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    model = YOLO(MODEL_NAME)
+    model = YOLO(str(MODEL_PATH if MODEL_PATH.exists() else MODEL_NAME))
 
     start_time = time.time()
     results = model.train(
