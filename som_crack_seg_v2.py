@@ -14,8 +14,8 @@ from skimage.morphology import (
 from skimage.measure import label, regionprops
 
 
-INPUT_DIR = Path("~/crack_datasets/images_denoise").expanduser()
-OUTPUT_DIR = Path("~/crack_datasets/som_crack_results_v2").expanduser()
+INPUT_DIR = Path("~/tests").expanduser()
+OUTPUT_DIR = Path("~/tests/results_v2").expanduser()
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
 

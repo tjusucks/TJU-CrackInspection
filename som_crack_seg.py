@@ -338,12 +338,7 @@ def make_overlay(image_bgr, mask_bool):
     return overlay
 
 
-def process_one(image_path: Path):
-    image_bgr = read_image(image_path)
-    if image_bgr is None:
-        print(f"Failed to read: {image_path}")
-        return False
-
+def segment_image_bgr(image_bgr):
     feats, aux = build_features(image_bgr)
     x, h, w = flatten_features(feats)
     som_w = get_som_width()
@@ -359,6 +354,16 @@ def process_one(image_path: Path):
     final_mask_u8 = (final_bool.astype(np.uint8) * 255)
 
     overlay = make_overlay(image_bgr, final_bool)
+    return final_bool, final_mask_u8, overlay
+
+
+def process_one(image_path: Path):
+    image_bgr = read_image(image_path)
+    if image_bgr is None:
+        print(f"Failed to read: {image_path}")
+        return False
+
+    final_bool, final_mask_u8, overlay = segment_image_bgr(image_bgr)
 
     # Keep legacy output path as overlay for compatibility with existing workflow.
     legacy_overlay_path = (OUTPUT_DIR / image_path.stem).with_suffix(".png")
