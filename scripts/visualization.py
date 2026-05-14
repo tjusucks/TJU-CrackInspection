@@ -7,8 +7,8 @@ import numpy as np
 from ultralytics import YOLO
 
 MODEL_PATH = 'runs/runs/Model_Comparison/exp_yolov8s-seg_mass_crack/weights/best.pt'
-VAL_IMAGES_DIR = '../datasets/YOLO_MASS_CRACK/images/val'
-OUTPUT_PATH = 'yolov8_segmentation_grid.png' 
+VAL_IMAGES_DIR = '../val'
+OUTPUT_PATH = '../yolov8_segmentation_grid.png' 
 
 def plot_mass_comparison_grid(model, img_paths, rows=10, cols=15):
     """
@@ -31,7 +31,14 @@ def plot_mass_comparison_grid(model, img_paths, rows=10, cols=15):
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
         # YOLO prediction
-        results = model.predict(img_path, conf=0.15, retina_masks=True, verbose=False)
+        results = model.predict(
+            img_path, 
+            conf=0.15,          # 极低阈值：把那些“似是而非”的裂缝全抓回来
+            iou=0.7,            # 允许更多重叠：解决裂缝断断续续的问题
+            retina_masks=True,  # 开启高清模式：让边缘贴合得更紧
+            imgsz=960,          # 放大看图：960 是 32 的倍数，4060 推理这个尺寸很轻松
+            verbose=False
+        )
         pred_res = results[0].plot()
         pred_rgb = cv2.cvtColor(pred_res, cv2.COLOR_BGR2RGB)
         
@@ -61,4 +68,4 @@ if __name__ == "__main__":
         print("No images found, please check the VAL_IMAGES_DIR path!")
     else:
         # You can modify rows and cols as needed
-        plot_mass_comparison_grid(model, all_imgs, rows=8, cols=6)
+        plot_mass_comparison_grid(model, all_imgs, rows=4, cols=3)
