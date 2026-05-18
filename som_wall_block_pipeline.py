@@ -7,7 +7,9 @@ from pathlib import Path
 
 import cv2
 
-from som_crack_seg import IMAGE_EXTS, read_image, segment_image_bgr
+from crack_run_report import summarize_wall_block_run, write_run_report
+from som_component_classifier import filter_mask_with_classifier, load_classifier_bundle
+from som_crack_seg import IMAGE_EXTS, make_overlay, read_image, segment_image_bgr
 
 
 DEFAULT_BACKEND_DIR = Path("~/CrackDetection_Backend").expanduser()
@@ -18,7 +20,9 @@ def import_backend_preprocessors(backend_dir: Path):
     if not backend_dir.exists():
         raise FileNotFoundError(f"Backend directory does not exist: {backend_dir}")
 
+    preprocess_dir = backend_dir / "preprocessImages"
     sys.path.insert(0, str(backend_dir))
+    sys.path.insert(0, str(preprocess_dir))
     from preprocessImages.utils.detectBoxAndSegBlock import (  # noqa: PLC0415
         detect_boxes_local,
         segment_blocks_local,
@@ -98,12 +102,26 @@ def run_som_on_image(
     overlay_dir: Path,
     min_crack_pixels: int,
     min_crack_area_ratio: float,
+    classifier_bundle=None,
+    classifier_threshold: float | None = None,
 ):
     image_bgr = read_image(image_path)
     if image_bgr is None:
         raise ValueError(f"Failed to read image: {image_path}")
 
-    mask_bool, mask_u8, overlay = segment_image_bgr(image_bgr)
+    mask_bool, _, _ = segment_image_bgr(image_bgr)
+    raw_crack_pixels = int(mask_bool.sum())
+    component_predictions = []
+    if classifier_bundle is not None:
+        mask_bool, component_predictions = filter_mask_with_classifier(
+            image_bgr,
+            mask_bool,
+            classifier_bundle,
+            threshold=classifier_threshold,
+        )
+
+    mask_u8 = (mask_bool.astype("uint8") * 255)
+    overlay = make_overlay(image_bgr, mask_bool)
     h, w = mask_bool.shape
     crack_pixels = int(mask_bool.sum())
     crack_area_ratio = crack_pixels / float(max(h * w, 1))
@@ -123,9 +141,12 @@ def run_som_on_image(
         "overlay_path": str(overlay_path),
         "width": int(w),
         "height": int(h),
+        "raw_crack_pixels": raw_crack_pixels,
         "crack_pixels": crack_pixels,
         "crack_area_ratio": crack_area_ratio,
         "have_crack": bool(have_crack),
+        "classifier_used": classifier_bundle is not None,
+        "component_predictions": component_predictions,
     }
 
 
@@ -140,6 +161,8 @@ def process_one(
     fallback_original: bool,
     detect_boxes_local,
     segment_blocks_local,
+    classifier_bundle=None,
+    classifier_threshold: float | None = None,
 ):
     stem = image_path.stem
     mask_dir = output_dir / "som_masks" / stem
@@ -175,6 +198,8 @@ def process_one(
             overlay_dir,
             min_crack_pixels,
             min_crack_area_ratio,
+            classifier_bundle=classifier_bundle,
+            classifier_threshold=classifier_threshold,
         )
         result["block_index"] = index
         block_results.append(result)
@@ -230,6 +255,17 @@ def parse_args():
     parser.add_argument("--confidence", type=float, default=0.7)
     parser.add_argument("--min-crack-pixels", type=int, default=25)
     parser.add_argument("--min-crack-area-ratio", type=float, default=0.0002)
+    parser.add_argument(
+        "--classifier-model",
+        default=None,
+        help="Optional supervised crack/non-crack component classifier .joblib.",
+    )
+    parser.add_argument(
+        "--classifier-threshold",
+        type=float,
+        default=None,
+        help="Override classifier crack probability threshold. Defaults to the value saved in the model.",
+    )
     parser.add_argument("--no-fallback-original", action="store_true")
     return parser.parse_args()
 
@@ -254,6 +290,11 @@ def main():
     ensure_model(yolo_model, "YOLO-OBB")
     ensure_model(sam_model, "MobileSAM")
     detect_boxes_local, segment_blocks_local = import_backend_preprocessors(backend_dir)
+    classifier_bundle = (
+        load_classifier_bundle(args.classifier_model)
+        if args.classifier_model
+        else None
+    )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     image_paths = list(iter_images(input_path))
@@ -276,6 +317,8 @@ def main():
                 fallback_original=not args.no_fallback_original,
                 detect_boxes_local=detect_boxes_local,
                 segment_blocks_local=segment_blocks_local,
+                classifier_bundle=classifier_bundle,
+                classifier_threshold=args.classifier_threshold,
             )
             summaries.append(summary)
             print(
@@ -298,9 +341,27 @@ def main():
         json.dumps(index, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    report = summarize_wall_block_run(
+        summaries=summaries,
+        failures=failed,
+        total=len(image_paths),
+        classifier_model=Path(args.classifier_model).expanduser()
+        if args.classifier_model
+        else None,
+        classifier_threshold=args.classifier_threshold
+        if args.classifier_threshold is not None
+        else (
+            None
+            if classifier_bundle is None
+            else float(classifier_bundle.get("threshold", 0.5))
+        ),
+    )
+    report_json_path, report_txt_path = write_run_report(output_dir, report)
 
     print("Done")
     print(f"Index: {index_path}")
+    print(f"Report JSON: {report_json_path}")
+    print(f"Report TXT: {report_txt_path}")
 
 
 if __name__ == "__main__":
