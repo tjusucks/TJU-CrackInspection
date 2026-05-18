@@ -55,9 +55,22 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Detect cracks in one image and output crack size measurements."
     )
-    parser.add_argument("--input", required=True, help="Input image path.")
+    parser.add_argument(
+        "--input",
+        "--image",
+        dest="input",
+        required=True,
+        help="Input image path.",
+    )
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
-    parser.add_argument("--classifier-model", default=str(DEFAULT_MODEL))
+    parser.add_argument(
+        "--classifier-model",
+        "--joblib",
+        "--model",
+        dest="classifier_model",
+        default=str(DEFAULT_MODEL),
+        help="Supervised classifier .joblib path.",
+    )
     parser.add_argument("--classifier-threshold", type=float, default=None)
     parser.add_argument(
         "--mm-per-pixel",
